@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>구매팀 무상품 소요량 계산기 (현대에버다임 CI 디자인)</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;700&display=swap" rel="stylesheet">
+    
+    <script type="module">
+        // 로컬 파일 papaparse.min.js의 코드를 실행하여 PapaParse 객체를 전역에 정의합니다.
+        import './papaparse.min.js';
+        
+        // PapaParse가 전역에서 정의되지 않았다면 오류를 발생시켜 문제가 해결되었는지 확인합니다.
+        if (typeof PapaParse === 'undefined') {
+            console.error("PapaParse 로드 실패: 로컬 파일이 비어 있거나 손상되었을 수 있습니다.");
+        }
+    </script>
+    
+    <style>
+        /* (CSS 스타일은 생략) */
+        :root {
+            --color-primary: #009688; 
+            --color-secondary: #CC9933; 
+            --color-dark: #212121; 
+            --color-light: #f4f7f6; 
+            --color-white: #ffffff;
+        }
+
+        body { 
+            font-family: 'Noto Sans KR', sans-serif; 
+            font-weight: 400;
+            padding: 0;
+            background-color: var(--color-light); 
+        }
+        .container { 
+            max-width: 900px; 
+            margin: 20px auto; 
+            background: var(--color-white); 
+            padding: 30px; 
+            border-radius: 4px; 
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+        }
+        
+        .header-section { 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: flex-start; 
+            margin-bottom: 20px;
+        }
+        
+        .logo-container {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+        }
+        #ciLogo {
+            max-width: 150px; 
+            height: auto;
+            margin-bottom: 10px;
+        }
+
+        .ci-title {
+            color: var(--color-primary); 
+            font-size: 24px;
+            font-weight: 700;
+            margin: 0;
+            margin-top: 10px; 
+        }
+        h3 { 
+            color: var(--color-dark); 
+            border-bottom: 3px solid var(--color-primary); 
+            padding-bottom: 8px; 
+            margin-top: 25px; 
+            font-weight: 700;
+            font-size: 18px;
+        }
+        
+        #adminButton { 
+            padding: 8px 15px; 
+            background-color: var(--color-secondary); 
+            color: var(--color-white); 
+            border: none; 
+            border-radius: 4px; 
+            cursor: pointer; 
+            font-weight: 700;
+            transition: background-color 0.3s; 
+        }
+        #adminButton:hover { background-color: #b3862d; }
+
+        .order-row select, .order-row input, .data-input input { 
+            padding: 8px; 
+            border: 1px solid #ddd; 
+            border-radius: 4px; 
+            box-sizing: border-box; 
+            font-family: 'Noto Sans KR', sans-serif;
+        }
+
+        #calculateButton { 
+            background-color: var(--color-primary); 
+            color: var(--color-white); 
+        }
+        #calculateButton:hover { background-color: #00796b; }
+        
+        .report-buttons button { 
+            font-weight: 700;
+            margin-left: 5px;
+            padding: 8px 15px;
+            border: none;
+            border-radius: 4px;
+            color: white;
+            cursor: pointer;
+        }
+        #printButton { background-color: #dc3545; } 
+        #downloadButton { background-color: var(--color-secondary); }
+
+
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th, td { 
+            border: 1px solid #eee; 
+            padding: 12px; 
+            text-align: left; 
+            font-size: 14px;
+        }
+        th { 
+            background-color: var(--color-light); 
+            color: var(--color-dark); 
+            font-weight: 700;
+        }
+        .total-row { 
+            font-weight: 700; 
+            background-color: #e6f7ff; 
+            color: var(--color-dark);
+        }
+        
+        #adminSection { 
+            border: 1px solid var(--color-secondary); 
+            background-color: #fffaf0; 
+            padding: 20px;
+            margin-top: 20px;
+            display: none; 
+        }
+        #adminSection button[onclick="uploadMasterDataFromCsv()"] {
+             background-color: var(--color-primary); 
+        }
+        #uploadTextButton {
+            background-color: #3f51b5; 
+        }
+
+        .action-button { background-color: #dc3545; color: white; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer;}
+        .data-input-grid { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr 1fr 0.5fr; gap: 10px; margin-bottom: 15px; }
+
+
+        @media print {
+            .logo-container, .ci-title { text-align: center; }
+            #ciLogo { max-width: 100px; margin: 10px auto; }
+            .ci-title { border-bottom: 3px solid var(--color-dark); color: var(--color-dark); font-size: 20px; padding-bottom: 10px; margin-bottom: 15px; }
+            .container { box-shadow: none; border: none; margin: 0; padding: 0; }
+            #adminButton, #adminSection, #inputArea, #addRowButton, #calculateButton, .report-buttons { display: none !important; }
+            h3 { display: none; }
+            table, th, td { border-color: #000 !important; }
+            th { background-color: #ddd !important; -webkit-print-color-adjust: exact; color: #000; }
+        }
+    </style>
+</head>
+<body>
+    
+    <div class="container">
+        <div class="header-section">
+            <div class="logo-container">
+                <img id="ciLogo" src="everdigm_logo.png" alt="현대에버다임 CI 로고"> 
+                <div class="ci-title">무상품 발주 소요 수량 계산기</div>
+            </div>
+            <button id="adminButton" onclick="toggleAdminMode()">관리자 모드 열기</button>
+        </div>
+        
+        <h3>발주 조합 입력</h3>
+        <div id="inputArea">
+            <div class="order-row" style="font-weight: bold; border-bottom: 1px solid #ccc; padding-bottom: 5px;">
+                <span>기종</span>
+                <span>딜러</span>
+                <span>출고 수량</span>
+                <span>삭제</span>
+            </div>
+            <div id="orderInputs">
+                </div>
+            <button id="addRowButton" onclick="addRow()">+ 조합 추가</button>
+            <button id="calculateButton" onclick="calculateRequirements()">총 소요량 계산</button>
+        </div>
+        
+        <div class="report-buttons" style="text-align: right; margin-bottom: 10px;">
+            <button id="printButton" onclick="printReport()" style="display: none;">
+                📄 PDF 보고서 인쇄 (Ctrl+P)
+            </button>
+            <button id="downloadButton" onclick="downloadCsv()" style="display: none;">
+                💾 계산 결과 Excel 다운로드 (CSV)
+            </button>
+        </div>
+
+        <h3>총 소요량 결과</h3>
+        <table id="resultTable">
+            <thead>
+                <tr>
+                    <th>품번</th>
+                    <th>품명</th>
+                    <th>총 소요 수량</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr><td colspan="3" style="text-align: center;">조합을 입력하고 계산 버튼을 눌러주세요.</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="container" id="adminSection">
+        <h3>⚙️ 마스터 데이터 관리 (관리자 전용)</h3>
+        <p style="color: #dc3545;">주의: 파일 업로드/텍스트 갱신 시 기존 데이터는 모두 덮어쓰기 됩니다.</p>
+
+        <h4>1. 엑셀 파일 (CSV) 업로드로 데이터 일괄 갱신</h4>
+        <div style="display: flex; gap: 10px; margin-bottom: 10px; align-items: center;">
+            <input type="file" id="csvFileInput" accept=".csv" style="flex-grow: 1;">
+            <button onclick="uploadMasterDataFromCsv()">
+                ⬆️ CSV 파일 갱신
+            </button>
+        </div>
+        <p style="font-size: 12px; color: #555;">(파일 업로드 기능에 오류가 있다면 아래 텍스트 붙여넣기 기능을 사용하세요.)</p>
+
+        <hr style="border-top: 1px solid #ddd; margin: 20px 0;">
+
+        <h4>2. 엑셀 데이터 직접 붙여넣기로 데이터 일괄 갱신</h4>
+        <textarea id="csvTextarea" rows="10" placeholder="여기에 엑셀/CSV 데이터를 헤더(기종,딜러,품번,품명,수량,비고) 포함하여 복사/붙여넣기 하세요." style="width: 100%; padding: 10px; box-sizing: border-box; margin-bottom: 10px;"></textarea>
+        <button id="uploadTextButton" onclick="uploadMasterDataFromText()">
+            📋 텍스트 데이터 갱신
+        </button>
+        
+        <p style="font-size: 12px; color: #555; margin-top: 10px;">(붙여넣기 데이터 형식: **기종,딜러,품번,품명,수량,비고** 순서여야 합니다.)</p>
+
+        <hr style="border-top: 1px solid #ddd; margin: 20px 0;">
+        
+        <h4>3. 단일 데이터 수동 추가</h4>
+        <div class="data-input-grid">
+            <input type="text" id="inputDealer" placeholder="딜러" required>
+            <input type="text" id="inputModel" placeholder="기종" required>
+            <input type="text" id="inputPartNumber" placeholder="품번" required>
+            <input type="text" id="inputPartName" placeholder="품명" required>
+            <input type="number" id="inputQuantity" placeholder="단위당 수량" min="1" value="1" required>
+            <button onclick="addData()">추가</button>
+        </div>
+
+        <h4>4. 현재 저장된 데이터 확인 및 삭제</h4>
+        <table id="dataListTable">
+            <thead>
+                <tr>
+                    <th>딜러</th>
+                    <th>기종</th>
+                    <th>품번</th>
+                    <th>품명</th>
+                    <th>소요수량</th>
+                    <th>삭제</th>
+                </tr>
+            </thead>
+            <tbody>
+                </tbody>
+        </table>
+    </div>
+
+<script>
+// --- [1] 상수 및 초기 데이터 설정 ---
+const LOCAL_STORAGE_KEY = 'everdigm_attachment_master_data';
+const ADMIN_PASSWORD = '구매팀짱'; // 관리자 비밀번호를 반드시 변경하세요!
+const INITIAL_MASTER_DATA = [
+    { "기종": "HMB150", "딜러": "A_DEALER", "품번": "SEAL-001", "품명": "BREAKER_SEAL_KIT_BASIC", "소요수량_단위당": 1 },
+    { "기종": "HMB150", "딜러": "A_DEALER", "품번": "CHISEL-003", "품명": "CHISEL_STANDARD_LONG", "소요수량_단위당": 2 },
+    { "기종": "HMB200", "딜러": "B_DEALER", "품번": "TOOL-010", "품명": "TOOL KIT STANDARD", "소요수량_단위당": 1 },
+];
+
+
+// --- [2] Local Storage 데이터 관리 함수 (유지) ---
+function loadMasterData() {
+    const dataString = localStorage.getItem(LOCAL_STORAGE_KEY);
+    if (!dataString) {
+        saveMasterData(INITIAL_MASTER_DATA);
+        return INITIAL_MASTER_DATA;
+    }
+    return JSON.parse(dataString);
+}
+function saveMasterData(data) {
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(data));
+}
+
+
+// --- [3] 다중 입력 및 계산 관련 함수 (유지) ---
+function getSelectOptions() {
+    const MASTER_DATA = loadMasterData();
+    const models = [...new Set(MASTER_DATA.map(item => item.기종))].sort();
+    const dealers = [...new Set(MASTER_DATA.map(item => item.딜러))].sort();
+    
+    let modelOptions = '<option value="">-- 기종 선택 --</option>';
+    models.forEach(m => modelOptions += `<option value="${m}">${m}</option>`);
+
+    let dealerOptions = '<option value="">-- 딜러 선택 --</option>';
+    dealers.forEach(d => dealerOptions += `<option value="${d}">${d}</option>`);
+
+    return { modelOptions, dealerOptions };
+}
+
+function addRow() {
+    const { modelOptions, dealerOptions } = getSelectOptions();
+    const orderInputs = document.getElementById('orderInputs');
+    
+    const newRow = document.createElement('div');
+    newRow.className = 'order-row';
+    newRow.innerHTML = `
+        <select class="input-model">${modelOptions}</select>
+        <select class="input-dealer">${dealerOptions}</select>
+        <input type="number" class="input-quantity" value="1" min="1">
+        <button onclick="removeRow(this)">X</button>
+    `;
+    orderInputs.appendChild(newRow);
+    resetCalculationDisplay();
+}
+
+function removeRow(button) {
+    button.closest('.order-row').remove();
+    resetCalculationDisplay();
+}
+
+function resetCalculationDisplay() {
+    const resultBody = document.getElementById('resultTable').querySelector('tbody');
+    resultBody.innerHTML = '<tr><td colspan="3" style="text-align: center;">조합을 입력하고 계산 버튼을 눌러주세요.</td></tr>';
+    document.getElementById('printButton').style.display = 'none';
+    document.getElementById('downloadButton').style.display = 'none';
+}
+
+function calculateRequirements() {
+    const MASTER_DATA = loadMasterData();
+    const orderRows = document.querySelectorAll('#orderInputs .order-row');
+    const resultBody = document.getElementById('resultTable').querySelector('tbody');
+    const requiredTotal = {}; 
+    
+    let isValid = true;
+    if (orderRows.length === 0) {
+        alert("최소한 하나의 발주 조합을 추가해 주세요.");
+        isValid = false;
+    }
+
+    const orders = [];
+    orderRows.forEach(row => {
+        const model = row.querySelector('.input-model').value;
+        const dealer = row.querySelector('.input-dealer').value;
+        const quantity = parseInt(row.querySelector('.input-quantity').value, 10);
+
+        if (!model || !dealer || isNaN(quantity) || quantity < 1) {
+            isValid = false;
+        }
+        orders.push({ model, dealer, quantity });
+    });
+
+    if (!isValid) {
+        alert("모든 조합의 기종, 딜러를 선택하고 유효한 출고 수량을 입력해 주세요.");
+        resetCalculationDisplay();
+        return;
+    }
+
+    orders.forEach(order => {
+        const { model, dealer, quantity } = order;
+        
+        const matchingItems = MASTER_DATA.filter(item => 
+            item.기종 === model && item.딜러 === dealer
+        );
+
+        if (matchingItems.length === 0) {
+            console.warn(`경고: 기종 ${model} / 딜러 ${dealer} 조합에 대한 마스터 데이터가 없습니다.`);
+            return;
+        }
+
+        matchingItems.forEach(item => {
+            const requiredCount = item.소요수량_단위당 * quantity;
+            const partNumber = item.품번;
+
+            if (requiredTotal[partNumber]) {
+                requiredTotal[partNumber].totalQuantity += requiredCount;
+            } else {
+                requiredTotal[partNumber] = {
+                    totalQuantity: requiredCount,
+                    partName: item.품명
+                };
+            }
+        });
+    });
+
+    resultBody.innerHTML = ''; 
+    const requiredParts = Object.keys(requiredTotal).sort();
+    let grandTotalItems = 0;
+    
+    if (requiredParts.length === 0) {
+        const row = resultBody.insertRow();
+        const cell = row.insertCell(0);
+        cell.colSpan = 3;
+        cell.style.textAlign = 'center';
+        cell.textContent = `⚠️ 계산 가능한 품목이 없습니다. 마스터 데이터를 확인해 주세요.`;
+        resetCalculationDisplay();
+        return;
+    }
+
+    requiredParts.forEach(partNumber => {
+        const data = requiredTotal[partNumber];
+        grandTotalItems += data.totalQuantity;
+
+        const row = resultBody.insertRow();
+        row.insertCell(0).textContent = partNumber;
+        row.insertCell(1).textContent = data.partName || '정보 없음';
+        row.insertCell(2).textContent = data.totalQuantity.toLocaleString();
+    });
+
+    const totalRow = resultBody.insertRow();
+    totalRow.className = 'total-row';
+    totalRow.insertCell(0).textContent = '총 소요 품목 수량 합계';
+    totalRow.insertCell(1).textContent = '';
+    totalRow.insertCell(2).textContent = grandTotalItems.toLocaleString();
+    
+    document.getElementById('printButton').style.display = 'inline-block'; 
+    document.getElementById('downloadButton').style.display = 'inline-block';
+}
+
+
+// --- [4] 관리자 모드 및 데이터 갱신 함수 ---
+
+let isAdminMode = false;
+
+function toggleAdminMode() {
+    const adminSection = document.getElementById('adminSection');
+    const adminButton = document.getElementById('adminButton');
+
+    if (!isAdminMode) {
+        const password = prompt("관리자 비밀번호를 입력하세요:");
+        if (password === ADMIN_PASSWORD) {
+            isAdminMode = true;
+            adminSection.style.display = 'block';
+            adminButton.textContent = '관리자 모드 닫기';
+            renderDataList();
+        } else {
+            alert("비밀번호가 틀렸습니다.");
+        }
+    } else {
+        isAdminMode = false;
+        adminSection.style.display = 'none';
+        adminButton.textContent = '관리자 모드 열기';
+    }
+}
+
+// 4-1. CSV 파일 업로드 기능
+function uploadMasterDataFromCsv() {
+    // PapaParse 정의 여부 재확인 (혹시 모를 오류 대비)
+    if (typeof PapaParse === 'undefined') {
+        alert("데이터 처리 라이브러리(PapaParse) 로드 실패: 파일을 확인하고 새로고침 후 다시 시도해주세요.");
+        return;
+    }
+
+    const fileInput = document.getElementById('csvFileInput');
+    const file = fileInput.files[0];
+
+    if (!file) {
+        alert("업로드할 CSV 파일을 선택해 주세요.");
+        return;
+    }
+    
+    if (!file.name.endsWith('.csv')) {
+        alert("CSV 파일만 업로드할 수 있습니다.");
+        return;
+    }
+
+    PapaParse.parse(file, {
+        header: true, 
+        skipEmptyLines: true,
+        dynamicTyping: true, 
+        complete: handleParsedData,
+        error: function(error) {
+            alert("CSV 파싱 중 오류가 발생했습니다: " + error);
+        }
+    });
+}
+
+// 4-2. 텍스트 박스 붙여넣기 기능
+function uploadMasterDataFromText() {
+    // PapaParse 정의 여부 재확인
+     if (typeof PapaParse === 'undefined') {
+        alert("데이터 처리 라이브러리(PapaParse) 로드 실패: 텍스트를 붙여넣기 전에 새로고침 후 다시 시도해주세요.");
+        return;
+    }
+
+    const csvText = document.getElementById('csvTextarea').value;
+
+    if (!csvText.trim()) {
+        alert("텍스트 입력 영역에 데이터를 붙여넣어 주세요.");
+        return;
+    }
+
+    PapaParse.parse(csvText, {
+        header: true, 
+        skipEmptyLines: true,
+        dynamicTyping: true, 
+        complete: handleParsedData,
+        error: function(error) {
+            alert("텍스트 파싱 중 오류가 발생했습니다: " + error);
+        }
+    });
+}
+
+
+// 4-3. 파싱된 데이터를 처리하고 저장하는 공통 함수
+function handleParsedData(results) {
+    const newMasterData = [];
+    const requiredHeaders = ['기종', '딜러', '품번', '품명', '수량', '비고'];
+
+    const headers = results.meta.fields;
+    let headerCheck = true;
+    
+    if (!headers || headers.length < requiredHeaders.length) {
+        headerCheck = false;
+    } else {
+        for(let i=0; i<requiredHeaders.length; i++) {
+            // 헤더가 정의된 순서와 내용이 일치하는지 확인
+            if (headers[i] !== requiredHeaders[i]) {
+                headerCheck = false;
+                break;
+            }
+        }
+    }
+    
+    if (!headerCheck) {
+        alert(`⚠️ 데이터 갱신 실패: 데이터의 헤더 순서가 잘못되었거나 형식이 불완전합니다. 반드시 '${requiredHeaders.join(',')}' 순서여야 합니다. (확인된 헤더: ${headers ? headers.slice(0, 6).join(', ') : '헤더 없음'})`);
+        return;
+    }
+
+    let rowCount = 0;
+    let errorCount = 0;
+    results.data.forEach(row => {
+        rowCount++;
+        
+        const quantity = parseInt(row['수량'], 10);
+
+        if (row['기종'] && row['딜러'] && row['품번'] && row['품명'] && !isNaN(quantity) && quantity >= 0) {
+            newMasterData.push({
+                "기종": String(row['기종']).trim().toUpperCase(),
+                "딜러": String(row['딜러']).trim().toUpperCase(),
+                "품번": String(row['품번']).trim().toUpperCase(),
+                "품명": String(row['품명']).trim(),
+                "소요수량_단위당": quantity 
+            });
+        } else {
+            errorCount++;
+            console.warn(`행 ${rowCount} 무시됨 (필수 필드 누락 또는 수량 오류):`, row);
+        }
+    });
+
+    if (newMasterData.length > 0) {
+        saveMasterData(newMasterData);
+        
+        renderDataList();
+        addRow(); 
+        
+        alert(`데이터 갱신 성공! 총 ${newMasterData.length}개 항목이 Local Storage에 저장되었습니다. (오류 행: ${errorCount}개)`);
+        document.getElementById('csvFileInput').value = ''; // 파일 입력 초기화
+        document.getElementById('csvTextarea').value = ''; // 텍스트 영역 초기화
+    } else {
+        alert("❌ 데이터 갱신 실패: 입력된 데이터에서 유효한 항목을 찾을 수 없습니다.");
+    }
+}
+
+
+function addData() {
+    const dealer = document.getElementById('inputDealer').value.trim();
+    const model = document.getElementById('inputModel').value.trim();
+    const partNumber = document.getElementById('inputPartNumber').value.trim();
+    const partName = document.getElementById('inputPartName').value.trim();
+    const quantity = parseInt(document.getElementById('inputQuantity').value, 10);
+
+    if (!model || !dealer || !partNumber || !partName || isNaN(quantity) || quantity < 1) {
+        alert("모든 필드를 정확하게 입력해 주세요.");
+        return;
+    }
+
+    const MASTER_DATA = loadMasterData();
+    MASTER_DATA.push({
+        "기종": model.toUpperCase(),
+        "딜러": dealer.toUpperCase(),
+        "품번": partNumber.toUpperCase(),
+        "품명": partName,
+        "소요수량_단위당": quantity
+    });
+
+    saveMasterData(MASTER_DATA);
+    alert("데이터가 성공적으로 추가되었습니다.");
+    renderDataList();
+    addRow(); 
+    
+    document.getElementById('inputDealer').value = ''; 
+    document.getElementById('inputModel').value = '';
+    document.getElementById('inputPartNumber').value = '';
+    document.getElementById('inputPartName').value = '';
+    document.getElementById('inputQuantity').value = '1';
+}
+
+function renderDataList() {
+    const MASTER_DATA = loadMasterData();
+    const dataBody = document.getElementById('dataListTable').querySelector('tbody');
+    dataBody.innerHTML = '';
+
+    MASTER_DATA.sort((a, b) => {
+        if (a.딜러 < b.딜러) return -1; 
+        if (a.딜러 > b.딜러) return 1;
+        if (a.기종 < b.기종) return -1;
+        if (a.기종 > b.기종) return 1;
+        return 0;
+    });
+
+    MASTER_DATA.forEach((item, index) => {
+        const row = dataBody.insertRow();
+        row.insertCell(0).textContent = item.딜러;
+        row.insertCell(1).textContent = item.기종;
+        row.insertCell(2).textContent = item.품번;
+        row.insertCell(3).textContent = item.품명;
+        row.insertCell(4).textContent = item.소요수량_단위당;
+        
+        const deleteCell = row.insertCell(5);
+        const deleteButton = document.createElement('button');
+        deleteButton.textContent = '삭제';
+        deleteButton.className = 'action-button';
+        deleteButton.onclick = () => deleteData(item.기종, item.딜러, item.품번);
+        deleteCell.appendChild(deleteButton);
+    });
+}
+
+function deleteData(model, dealer, partNumber) {
+    if (confirm(`정말로 기종: ${model}, 딜러: ${dealer}, 품번: ${partNumber} 항목을 삭제하시겠습니까?`)) {
+        let MASTER_DATA = loadMasterData();
+        
+        MASTER_DATA = MASTER_DATA.filter(item => 
+            !(item.기종 === model && item.딜러 === dealer && item.품번 === partNumber)
+        );
+
+        saveMasterData(MASTER_DATA);
+        
+        alert("데이터가 삭제되었습니다.");
+        renderDataList();
+        addRow();
+    }
+}
+
+
+// --- [5] 보고서 및 다운로드 함수 (유지) ---
+
+function printReport() {
+    window.print(); 
+}
+
+function downloadCsv() {
+    const table = document.getElementById('resultTable');
+    const rows = table.querySelectorAll('tr');
+    let csv = [];
+
+    const headerRow = rows[0];
+    let header = [];
+    headerRow.querySelectorAll('th').forEach(th => {
+        header.push(th.textContent.trim());
+    });
+    csv.push(header.join(','));
+
+    for (let i = 1; i < rows.length; i++) {
+        const row = rows[i];
+        let rowData = [];
+        if (!row.classList.contains('total-row')) { 
+            row.querySelectorAll('td').forEach(cell => {
+                let cellData = cell.textContent.trim().replace(/"/g, '""');
+                cellData = cellData.replace(/,/g, ''); 
+                rowData.push(`"${cellData}"`);
+            });
+            csv.push(rowData.join(','));
+        }
+    }
+    
+    const csvString = csv.join('\n');
+    const blob = new Blob(["\ufeff", csvString], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    
+    const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    link.href = URL.createObjectURL(blob);
+    link.download = `다중발주_총소요량_${today}.csv`;
+    
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+
+// 웹페이지 로드 시 초기 행 추가
+window.onload = function() {
+    addRow(); 
+};
+</script>
+
+</body>
+</html>
