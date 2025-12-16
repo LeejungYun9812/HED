@@ -6,6 +6,11 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 
+<!-- 📄 PDF & Excel 내보내기 라이브러리 추가 -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.1/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
 <style>
 :root {
   --color-primary: #009688;
@@ -55,8 +60,8 @@ th{background:var(--color-light);}
   <button id="calculateButton" onclick="calculateRequirements()">총 소요량 계산</button>
 
   <div class="report-buttons" id="reportBtns" style="display:none;text-align:right;margin-top:15px;">
-    <button class="action-btn" onclick="window.print()">📄 PDF 출력</button>
-    <button class="action-btn" onclick="downloadCsv()">💾 Excel 추출</button>
+    <button class="action-btn" onclick="downloadPDF()">📄 PDF 내보내기</button>
+    <button class="action-btn" onclick="downloadExcel()">💾 Excel 내보내기</button>
   </div>
 
   <h3>총 소요량 결과</h3>
@@ -113,12 +118,11 @@ let supplyData=JSON.parse(localStorage.getItem(SUPPLY_KEY))||{
 const groups={
   nitrogen_large:["EHB05","EHB06","EHB10","EHB13","EHB17","EHB20","EHB25","EHB30","EHB40","EHB50","EHB70","EHB85","EHB100","EH 01","EH 02","EH 03","EH 04","EH 05","EH 06","EH 22","EH 31","EH 40","EH 50","PRB050","PRB060","PRB100","PRB150","PRB170","PRB200","PRB250","PRB300","EHB35","PRB400","PRB500","PRB700"],
   nitrogen_small:["EHB008","EHB01","EHB02","EHB03","EHB04","EH 13","EH 10","PRB008","PRB010","PRB020","PRB030","PRB040"],
-  gas_small:["EHB008","EHB01","EHB02","EHB03","EHB04","EHB05","EHB06","EHB10","EHB13","EH 01","EH 02","EH 03","EH 04","EH 05","EH 06","PRB008","PRB010","PRB020","PRB030","PRB040","PRB050","PRB060","PRB100","PRB150"],
-  gas_large:["EHB17","EHB20","EHB25","EHB30","EHB40","EHB50","EHB70","EHB85","EHB100","EH 10","EH 13","EH 22","EH 31","EH 40","EH 50","PRB170","PRB200","PRB250","PRB300","EHB35","PRB400","PRB500","PRB700"]
+  gas_small:["EHB008","EHB01","EHB02","EHB03","EHB04","EHB05","EHB06","EHB10","EHB13","EH 01","EH 02","EH 03","EH 04","EH 05","EH 06","PRB008","PRB010","PRB020","PRB030","PRB040","PRB050","PRB060","PRB100","PRB150","RHB301","RHB302","RHB303","RHB304","RHB305","RHB306","RHB310","RHB313"],
+  gas_large:["EHB17","EHB20","EHB25","EHB30","EHB40","EHB50","EHB70","EHB85","EHB100","EH 10","EH 13","EH 22","EH 31","EH 40","EH 50","PRB170","PRB200","PRB250","PRB300","EHB35","PRB400","PRB500","PRB700","RHB317","RHB320","RHB325","RHB330","RHB340","RHB350","RHB370"]
 };
 
 function saveSupply(){localStorage.setItem(SUPPLY_KEY,JSON.stringify(supplyData));}
-
 function updateSupplyPanel(){
   const list=document.getElementById('supplyList');
   list.innerHTML='';
@@ -304,14 +308,58 @@ function deleteAll(){
   const pw=prompt("전체 삭제 비밀번호를 입력하세요:");if(pw!==ADMIN_PASSWORD)return alert("비밀번호가 틀렸습니다.");
   if(confirm("⚠ 모든 데이터를 삭제하시겠습니까?")){localStorage.removeItem(LOCAL_STORAGE_KEY);applyFilter();alert("전체 데이터 삭제 완료.");}
 }
-function downloadCsv(){
-  const rows=document.querySelectorAll('#resultTable tr');
-  const csv=[...rows].map(r=>[...r.children].map(c=>`"${c.textContent}"`).join(',')).join('\n');
-  const blob=new Blob(["\ufeff"+csv],{type:'text/csv;charset=utf-8;'});
-  const link=document.createElement('a');link.href=URL.createObjectURL(blob);
-  const d=new Date(),mm=String(d.getMonth()+1).padStart(2,'0'),dd=String(d.getDate()).padStart(2,'0');
-  link.download=`${mm}-${dd} 무상품 발주분.csv`;link.click();
+
+async function downloadPDF() {
+  const { jsPDF } = window.jspdf;
+
+  if (typeof html2canvas === "undefined") {
+    await new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = "https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js";
+      script.onload = resolve;
+      script.onerror = reject;
+      document.head.appendChild(script);
+    });
+  }
+
+  const container = document.querySelector(".container");
+  const logo = document.getElementById("ciLogo");
+
+  // ✅ 로고 잠시 숨기기 (CORS 방지)
+  const prevDisplay = logo.style.display;
+  logo.style.display = "none";
+
+  // ✅ 화면 캡처
+  const canvas = await html2canvas(container, {
+    scale: 2,
+    useCORS: true,
+    logging: false,
+  });
+
+  // 다시 로고 복원
+  logo.style.display = prevDisplay;
+
+  const imgData = canvas.toDataURL("image/png");
+  const pdf = new jsPDF("p", "mm", "a4");
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  const imgHeight = (canvas.height * pageWidth) / canvas.width;
+
+  pdf.addImage(imgData, "PNG", 0, 0, pageWidth, imgHeight);
+  pdf.save(`무상품 소요량 ${new Date().toISOString().slice(0,10)}.pdf`);
 }
+
+
+
+function downloadExcel() {
+  const table = document.getElementById('resultTable');
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.table_to_sheet(table);
+  XLSX.utils.book_append_sheet(wb, ws, '결과');
+  const date = new Date();
+  const fileName = `${date.getMonth() + 1}-${date.getDate()} 무상품 소요량.xlsx`;
+  XLSX.writeFile(wb, fileName);
+}
+
 window.onload=()=>{addRow();updateSupplyPanel();}
 </script>
 </body>
