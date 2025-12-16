@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>현대에버다임 무상품 소요량 계산기</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+
+<style>
+:root {
+  --color-primary: #009688;
+  --color-secondary: #CC9933;
+  --color-danger: #dc3545;
+  --color-light: #f4f7f6;
+}
+body{font-family:'Noto Sans KR',sans-serif;background:var(--color-light);margin:0;}
+.container{max-width:900px;margin:20px auto;background:white;padding:30px;border-radius:4px;box-shadow:0 2px 5px rgba(0,0,0,0.05);position:relative;}
+.header-section{text-align:center;margin-bottom:20px;}
+#ciLogo{max-width:180px;height:auto;margin-bottom:10px;}
+.title{color:var(--color-primary);font-size:26px;font-weight:700;margin:0;}
+#adminButton{position:absolute;top:20px;right:30px;background:var(--color-secondary);color:white;border:none;border-radius:4px;padding:8px 15px;font-weight:700;cursor:pointer;}
+h3{border-bottom:3px solid var(--color-primary);padding-bottom:8px;}
+button{cursor:pointer;border:none;border-radius:4px;padding:8px 15px;font-weight:700;}
+#calculateButton{background:var(--color-primary);color:white;}
+.action-btn{background:var(--color-secondary);color:white;margin-right:8px;}
+table{width:100%;border-collapse:collapse;margin-top:15px;}
+th,td{border:1px solid #eee;padding:8px;text-align:left;font-size:13px;}
+th{background:var(--color-light);}
+#supplyPanel{position:fixed;top:50%;right:10px;width:250px;transform:translateY(-50%);background:white;border:2px solid var(--color-secondary);border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.1);padding:10px;font-size:12.5px;}
+#supplyPanel h4{text-align:center;margin-top:0;color:var(--color-primary);font-size:14px;}
+.supply-item{margin:6px 0;padding:6px;border:1px solid #ddd;border-radius:6px;}
+.status{font-weight:bold;}
+.danger{color:var(--color-danger);}
+.supply-header{display:flex;justify-content:space-between;align-items:center;font-size:12px;}
+#pagination{text-align:center;margin-top:10px;}
+.page-btn{background:none;border:none;font-size:14px;margin:0 5px;cursor:pointer;color:var(--color-primary);font-weight:bold;}
+.page-btn.active{text-decoration:underline;color:var(--color-danger);}
+#adminSection{display:none;border:1px solid var(--color-secondary);background:#fffaf0;padding:20px;margin-top:20px;}
+.filter-bar select{margin-right:10px;padding:6px;}
+@media print{#supplyPanel,#adminButton,#calculateButton,#addRowButton,.report-buttons,#adminSection{display:none!important;}}
+</style>
+</head>
+
+<body>
+<div class="container">
+  <button id="adminButton" onclick="toggleAdminMode()">관리자 모드 열기</button>
+  <div class="header-section">
+    <img id="ciLogo" src="everdigm_logo.png" alt="현대에버다임 CI 로고">
+    <h1 class="title">무상품 소요량 계산기</h1>
+  </div>
+
+  <h3>발주 조합 입력</h3>
+  <div id="orderInputs"></div>
+  <button onclick="addRow()">+ 조합 추가</button>
+  <button id="calculateButton" onclick="calculateRequirements()">총 소요량 계산</button>
+
+  <div class="report-buttons" id="reportBtns" style="display:none;text-align:right;margin-top:15px;">
+    <button class="action-btn" onclick="window.print()">📄 PDF 출력</button>
+    <button class="action-btn" onclick="downloadCsv()">💾 Excel 추출</button>
+  </div>
+
+  <h3>총 소요량 결과</h3>
+  <table id="resultTable">
+    <thead><tr><th>품번</th><th>품명</th><th>총 소요 수량</th><th>비고</th></tr></thead>
+    <tbody><tr><td colspan="4" style="text-align:center;">조합을 입력하고 계산 버튼을 눌러주세요.</td></tr></tbody>
+  </table>
+</div>
+
+<!-- ✅ 우측 패널: 소모품 발주 관리 -->
+<div id="supplyPanel">
+  <h4>소모품 발주 현황</h4>
+  <div id="supplyList"></div>
+</div>
+
+<!-- ✅ 관리자 모드 (필터, 삭제, 페이지 포함) -->
+<div class="container" id="adminSection">
+  <h3>⚙️ 마스터 데이터 관리</h3>
+  <textarea id="csvTextarea" rows="8" placeholder="엑셀 데이터 복사 → 붙여넣기 (기종, 아이템, 딜러, 품번, 품명, 수량, 비고 순)" style="width:100%;"></textarea>
+  <button class="action-btn" onclick="uploadMasterDataFromText()">📋 텍스트 데이터 추가</button>
+
+  <div class="filter-bar" style="margin-top:15px;">
+    <select id="filterDealer" onchange="applyFilter()"><option value="">-- 딜러 전체 --</option></select>
+    <select id="filterItem" onchange="applyFilter()"><option value="">-- 아이템 전체 --</option></select>
+    <button class="action-btn" onclick="deleteByFilter()">🗑 필터 조건 데이터 삭제</button>
+  </div>
+
+  <div style="margin-top:10px;display:flex;justify-content:space-between;align-items:center;">
+    <div>
+      <button class="action-btn" onclick="selectAll(true)">☑ 전체선택</button>
+      <button class="action-btn" onclick="selectAll(false)">⬜ 선택해제</button>
+      <button class="action-btn" onclick="deleteSelected()">✔ 선택 항목 삭제</button>
+    </div>
+    <button class="action-btn" style="background:#dc3545;" onclick="deleteAll()">🗑 전체 삭제</button>
+  </div>
+
+  <table id="dataListTable" style="margin-top:15px;">
+    <thead><tr><th>선택</th><th>딜러</th><th>아이템</th><th>기종</th><th>품번</th><th>품명</th><th>소요수량</th><th>비고</th></tr></thead>
+    <tbody></tbody>
+  </table>
+  <div id="pagination"></div>
+</div>
+
+<script>
+const LOCAL_STORAGE_KEY='everdigm_attachment_master_data';
+const SUPPLY_KEY='everdigm_supply_counter';
+const ADMIN_PASSWORD='구매팀짱';
+let isAdminMode=false,currentPage=1,ROWS_PER_PAGE=20,filteredData=[];
+
+let supplyData=JSON.parse(localStorage.getItem(SUPPLY_KEY))||{
+  'A090-0007':0,'A090-0021':0,'A090-0052':0,'A090-0054':0
+};
+
+const groups={
+  nitrogen_large:["EHB05","EHB06","EHB10","EHB13","EHB17","EHB20","EHB25","EHB30","EHB40","EHB50","EHB70","EHB85","EHB100","EH 01","EH 02","EH 03","EH 04","EH 05","EH 06","EH 22","EH 31","EH 40","EH 50","PRB050","PRB060","PRB100","PRB150","PRB170","PRB200","PRB250","PRB300","EHB35","PRB400","PRB500","PRB700"],
+  nitrogen_small:["EHB008","EHB01","EHB02","EHB03","EHB04","EH 13","EH 10","PRB008","PRB010","PRB020","PRB030","PRB040"],
+  gas_small:["EHB008","EHB01","EHB02","EHB03","EHB04","EHB05","EHB06","EHB10","EHB13","EH 01","EH 02","EH 03","EH 04","EH 05","EH 06","PRB008","PRB010","PRB020","PRB030","PRB040","PRB050","PRB060","PRB100","PRB150"],
+  gas_large:["EHB17","EHB20","EHB25","EHB30","EHB40","EHB50","EHB70","EHB85","EHB100","EH 10","EH 13","EH 22","EH 31","EH 40","EH 50","PRB170","PRB200","PRB250","PRB300","EHB35","PRB400","PRB500","PRB700"]
+};
+
+function saveSupply(){localStorage.setItem(SUPPLY_KEY,JSON.stringify(supplyData));}
+
+function updateSupplyPanel(){
+  const list=document.getElementById('supplyList');
+  list.innerHTML='';
+  const items=[
+    {code:'A090-0021',name:'NITROGEN GAS BOTTLE (소형)'},
+    {code:'A090-0007',name:'NITROGEN GAS BOTTLE (대형)'},
+    {code:'A090-0052',name:'GAS CHARGING KIT (소형)'},
+    {code:'A090-0054',name:'GAS CHARGING KIT (대형)'}
+  ];
+  items.forEach(i=>{
+    const div=document.createElement('div');
+    div.className='supply-item';
+    div.innerHTML=`
+      <div class="supply-header" style="flex-direction:column;align-items:flex-start;">
+        <span style="margin-bottom:4px;"><b>[${i.code}]</b><br>${i.name}</span>
+        <button style="align-self:flex-end;background:#999;color:white;padding:2px 6px;font-size:11px;border:none;border-radius:3px;" onclick="resetOne('${i.code}')">발주완료</button>
+      </div>
+      <div class="status ${supplyData[i.code]>=50?'danger':''}">
+        ${supplyData[i.code]}개${supplyData[i.code]>=50?' ⚠ 발주 필요':''}
+      </div>`;
+    list.appendChild(div);
+  });
+}
+function resetOne(code){supplyData[code]=0;saveSupply();updateSupplyPanel();alert(`[${code}] 초기화 완료.`);}
+
+function loadMasterData(){const d=localStorage.getItem(LOCAL_STORAGE_KEY);return d?JSON.parse(d):[];}
+function saveMasterData(d){localStorage.setItem(LOCAL_STORAGE_KEY,JSON.stringify(d));}
+
+function toggleAdminMode(){
+  const admin=document.getElementById('adminSection');
+  if(!isAdminMode){const pw=prompt("관리자 비밀번호를 입력하세요:");if(pw===ADMIN_PASSWORD){isAdminMode=true;admin.style.display='block';refreshFilters();applyFilter();}else alert("비밀번호가 틀렸습니다.");}
+  else{isAdminMode=false;admin.style.display='none';}
+}
+
+function addRow(){
+  const data=loadMasterData();
+  const dealers=[...new Set(data.map(d=>d.딜러))].sort();
+  const div=document.createElement('div');
+  div.className='order-row';div.style.marginBottom='8px';
+  div.innerHTML=`
+    <select class="input-dealer" onchange="updateItemOptions(this)">
+      <option value="">-- 딜러 선택 --</option>${dealers.map(d=>`<option value="${d}">${d}</option>`).join('')}
+    </select>
+    <select class="input-item" disabled onchange="updateModelOptions(this)"><option value="">-- 아이템 선택 --</option></select>
+    <select class="input-model" disabled><option value="">-- 기종 선택 --</option></select>
+    <input type="number" class="input-quantity" value="1" min="1"><button onclick="removeRow(this)">X</button>`;
+  document.getElementById('orderInputs').appendChild(div);
+}
+function updateItemOptions(sel){
+  const dealer=sel.value,data=loadMasterData(),itemSel=sel.nextElementSibling,modelSel=itemSel.nextElementSibling;
+  modelSel.disabled=true;modelSel.innerHTML='<option value="">-- 기종 선택 --</option>';
+  if(!dealer){itemSel.disabled=true;itemSel.innerHTML='<option value="">-- 아이템 선택 --</option>';return;}
+  const items=[...new Set(data.filter(d=>d.딜러===dealer).map(d=>d.아이템))].sort();
+  itemSel.disabled=false;itemSel.innerHTML='<option value="">-- 아이템 선택 --</option>'+items.map(i=>`<option value="${i}">${i}</option>`).join('');
+}
+function updateModelOptions(sel){
+  const dealer=sel.previousElementSibling.value,item=sel.value,data=loadMasterData(),modelSel=sel.nextElementSibling;
+  if(!item){modelSel.disabled=true;modelSel.innerHTML='<option value="">-- 기종 선택 --</option>';return;}
+  const models=[...new Set(data.filter(d=>d.딜러===dealer&&d.아이템===item).map(d=>d.기종))].sort();
+  modelSel.disabled=false;modelSel.innerHTML='<option value="">-- 기종 선택 --</option>'+models.map(m=>`<option value="${m}">${m}</option>`).join('');
+}
+function removeRow(b){b.closest('.order-row').remove();}
+
+function calculateRequirements(){
+  const data = loadMasterData();
+  const rows = document.querySelectorAll('.order-row');
+  const res = {};
+
+  if (rows.length === 0) {
+    alert("조합을 추가해주세요.");
+    return;
+  }
+
+  rows.forEach(r => {
+    const dealer = (r.querySelector('.input-dealer').value || '').trim();
+    const item = (r.querySelector('.input-item').value || '').trim();
+    const model = (r.querySelector('.input-model').value || '').trim().toUpperCase();
+    const q = parseInt(r.querySelector('.input-quantity').value, 10) || 0;
+
+    if (!dealer || !item || !model || q <= 0) return;
+
+    const items = data.filter(i =>
+      i.딜러 === dealer &&
+      i.아이템 === item &&
+      i.기종.toUpperCase().trim() === model
+    );
+
+    if (groups.nitrogen_small.includes(model)) supplyData['A090-0021'] += q;
+    if (groups.nitrogen_large.includes(model)) supplyData['A090-0007'] += q;
+    if (groups.gas_small.includes(model)) supplyData['A090-0052'] += q;
+    if (groups.gas_large.includes(model)) supplyData['A090-0054'] += q;
+
+    items.forEach(i => {
+      const count = (parseInt(i.소요수량_단위당, 10) || 0) * q;
+      if (!res[i.품번]) res[i.품번] = { name: i.품명, total: 0, remark: i.비고 || '' };
+      res[i.품번].total += count;
+    });
+  });
+
+  saveSupply();
+  updateSupplyPanel();
+
+  const tbody = document.querySelector('#resultTable tbody');
+  tbody.innerHTML = '';
+
+  const keys = Object.keys(res);
+  if (keys.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">⚠️ 계산 가능한 항목이 없습니다.</td></tr>';
+    return;
+  }
+
+  keys.forEach(k => {
+    const r = tbody.insertRow();
+    r.insertCell(0).textContent = k;
+    r.insertCell(1).textContent = res[k].name;
+    r.insertCell(2).textContent = res[k].total;
+    r.insertCell(3).textContent = res[k].remark;
+  });
+
+  document.getElementById('reportBtns').style.display = 'block';
+}
+
+function uploadMasterDataFromText(){
+  const t=document.getElementById('csvTextarea').value.trim();if(!t)return alert("데이터를 붙여넣으세요.");const d=t.includes('\t')?'\t':',';Papa.parse(t,{header:true,skipEmptyLines:true,delimiter:d,complete:handleParsedData});
+}
+function handleParsedData(r){
+  const arr=[];
+  r.data.forEach(x=>{
+    if(x.기종 && x.아이템 && x.딜러 && x.품번 && x.품명 && x.수량){
+      arr.push({
+        "기종":x.기종.trim(),
+        "아이템":x.아이템.trim(),
+        "딜러":x.딜러.trim(),
+        "품번":x.품번.trim(),
+        "품명":x.품명.trim(),
+        "소요수량_단위당":parseInt(x.수량,10),
+        "비고":x.비고?x.비고.trim():""
+      });
+    }
+  });
+  const existing = loadMasterData();
+  const merged = existing.concat(arr);
+  saveMasterData(merged);
+  alert(`총 ${arr.length}개 데이터 추가, 전체 ${merged.length}개 데이터 저장되었습니다.`);
+  refreshFilters();
+  applyFilter();
+}
+
+function refreshFilters(){
+  const data=loadMasterData();const dealers=[...new Set(data.map(x=>x.딜러))].sort();const items=[...new Set(data.map(x=>x.아이템))].sort();
+  const dealerSel=document.getElementById('filterDealer'),itemSel=document.getElementById('filterItem');
+  dealerSel.innerHTML='<option value="">-- 딜러 전체 --</option>'+dealers.map(d=>`<option value="${d}">${d}</option>`).join('');
+  itemSel.innerHTML='<option value="">-- 아이템 전체 --</option>'+items.map(i=>`<option value="${i}">${i}</option>`).join('');
+}
+function applyFilter(){
+  const all=loadMasterData(),d=document.getElementById('filterDealer').value,i=document.getElementById('filterItem').value;
+  filteredData=all.filter(x=>(!d||x.딜러===d)&&(!i||x.아이템===i));currentPage=1;renderDataList();
+}
+function renderDataList(){
+  const tbody=document.querySelector('#dataListTable tbody');tbody.innerHTML='';const start=(currentPage-1)*ROWS_PER_PAGE,end=start+ROWS_PER_PAGE,pageData=filteredData.slice(start,end);
+  pageData.forEach(i=>{
+    const r=tbody.insertRow();const cb=document.createElement('input');cb.type='checkbox';cb.className='selectRow';cb.dataset.key=`${i.딜러}|${i.아이템}|${i.기종}|${i.품번}`;
+    r.insertCell(0).appendChild(cb);r.insertCell(1).textContent=i.딜러;r.insertCell(2).textContent=i.아이템;r.insertCell(3).textContent=i.기종;r.insertCell(4).textContent=i.품번;r.insertCell(5).textContent=i.품명;r.insertCell(6).textContent=i.소요수량_단위당;r.insertCell(7).textContent=i.비고||"";});
+  renderPagination(filteredData.length);
+}
+function renderPagination(t){const c=document.getElementById('pagination');c.innerHTML='';const p=Math.ceil(t/ROWS_PER_PAGE);if(p<=1)return;
+  const prev=document.createElement('button');prev.textContent='◀';prev.className='page-btn';prev.disabled=currentPage===1;prev.onclick=()=>{currentPage--;renderDataList();};c.appendChild(prev);
+  for(let i=1;i<=p;i++){const b=document.createElement('button');b.textContent=i;b.className='page-btn'+(i===currentPage?' active':'');b.onclick=()=>{currentPage=i;renderDataList();};c.appendChild(b);}
+  const next=document.createElement('button');next.textContent='▶';next.className='page-btn';next.disabled=currentPage===p;next.onclick=()=>{currentPage++;renderDataList();};c.appendChild(next);
+}
+function selectAll(chk){document.querySelectorAll('.selectRow').forEach(c=>c.checked=chk);}
+function deleteSelected(){
+  const ch=document.querySelectorAll('.selectRow:checked');if(!ch.length)return alert("삭제할 항목을 선택하세요.");if(!confirm(`${ch.length}개 삭제?`))return;
+  let d=loadMasterData();ch.forEach(c=>{const[k1,k2,k3,k4]=c.dataset.key.split('|');d=d.filter(x=>!(x.딜러===k1&&x.아이템===k2&&x.기종===k3&&x.품번===k4));});
+  saveMasterData(d);applyFilter();alert("삭제 완료.");
+}
+function deleteByFilter(){
+  const d=document.getElementById('filterDealer').value,i=document.getElementById('filterItem').value;
+  if(!d&&!i)return alert("필터를 선택하세요.");if(!confirm(`딜러(${d||'전체'}) / 아이템(${i||'전체'}) 데이터 전체 삭제?`))return;
+  let data=loadMasterData();data=data.filter(x=>!((!d||x.딜러===d)&&(!i||x.아이템===i)));saveMasterData(data);applyFilter();alert("필터 조건 데이터 삭제 완료.");
+}
+function deleteAll(){
+  const pw=prompt("전체 삭제 비밀번호를 입력하세요:");if(pw!==ADMIN_PASSWORD)return alert("비밀번호가 틀렸습니다.");
+  if(confirm("⚠ 모든 데이터를 삭제하시겠습니까?")){localStorage.removeItem(LOCAL_STORAGE_KEY);applyFilter();alert("전체 데이터 삭제 완료.");}
+}
+function downloadCsv(){
+  const rows=document.querySelectorAll('#resultTable tr');
+  const csv=[...rows].map(r=>[...r.children].map(c=>`"${c.textContent}"`).join(',')).join('\n');
+  const blob=new Blob(["\ufeff"+csv],{type:'text/csv;charset=utf-8;'});
+  const link=document.createElement('a');link.href=URL.createObjectURL(blob);
+  const d=new Date(),mm=String(d.getMonth()+1).padStart(2,'0'),dd=String(d.getDate()).padStart(2,'0');
+  link.download=`${mm}-${dd} 무상품 발주분.csv`;link.click();
+}
+window.onload=()=>{addRow();updateSupplyPanel();}
+</script>
+</body>
+</html>
