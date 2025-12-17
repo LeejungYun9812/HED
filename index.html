@@ -116,10 +116,10 @@ let supplyData=JSON.parse(localStorage.getItem(SUPPLY_KEY))||{
 };
 
 const groups={
-  nitrogen_large:["EHB05","EHB06","EHB10","EHB13","EHB17","EHB20","EHB25","EHB30","EHB40","EHB50","EHB70","EHB85","EHB100","EH 01","EH 02","EH 03","EH 04","EH 05","EH 06","EH 22","EH 31","EH 40","EH 50","PRB050","PRB060","PRB100","PRB150","PRB170","PRB200","PRB250","PRB300","EHB35","PRB400","PRB500","PRB700"],
+  nitrogen_large:["EHB05","EHB06","EHB10","EHB13","EHB17","EHB20","EHB25","EHB30","EHB40","EHB50","EHB70","EHB85","EHB100","EH 01","EH 02","EH 03","EH 04","EH 05","EH 06","EH 22","EH 31","EH 40","EH 50","PRB050","PRB060","PRB100","PRB150","PRB170","PRB200","PRB250","PRB300","EHB35","PRB400","PRB500","PRB700","RHB340","RHB350","RHB370"],
   nitrogen_small:["EHB008","EHB01","EHB02","EHB03","EHB04","EH 13","EH 10","PRB008","PRB010","PRB020","PRB030","PRB040"],
   gas_small:["EHB008","EHB01","EHB02","EHB03","EHB04","EHB05","EHB06","EHB10","EHB13","EH 01","EH 02","EH 03","EH 04","EH 05","EH 06","PRB008","PRB010","PRB020","PRB030","PRB040","PRB050","PRB060","PRB100","PRB150","RHB301","RHB302","RHB303","RHB304","RHB305","RHB306","RHB310","RHB313"],
-  gas_large:["EHB17","EHB20","EHB25","EHB30","EHB40","EHB50","EHB70","EHB85","EHB100","EH 10","EH 13","EH 22","EH 31","EH 40","EH 50","PRB170","PRB200","PRB250","PRB300","EHB35","PRB400","PRB500","PRB700","RHB317","RHB320","RHB325","RHB330","RHB340","RHB350","RHB370"]
+  gas_large:["EHB17","EHB20","EHB25","EHB30","EHB40","EHB50","EHB70","EHB85","EHB100","EH 10","EH 13","EH 22","EH 31","EH 40","EH 50","PRB170","PRB200","PRB250","PRB300","EHB35","PRB400","PRB500","PRB700","RHB317","RHB320","RHB325","RHB330","RHB340","RHB350","RHB370","RHB340","RHB350","RHB370"]
 };
 
 function saveSupply(){localStorage.setItem(SUPPLY_KEY,JSON.stringify(supplyData));}
@@ -348,8 +348,6 @@ async function downloadPDF() {
   pdf.save(`무상품 소요량 ${new Date().toISOString().slice(0,10)}.pdf`);
 }
 
-
-
 function downloadExcel() {
   const table = document.getElementById('resultTable');
   const wb = XLSX.utils.book_new();
@@ -360,7 +358,29 @@ function downloadExcel() {
   XLSX.writeFile(wb, fileName);
 }
 
-window.onload=()=>{addRow();updateSupplyPanel();}
+async function loadMasterDataFromServer() {
+  try {
+    const res = await fetch('data/master.json');
+    const json = await res.json();
+    saveMasterData(json); // localStorage에도 저장
+    console.log("✅ 서버에서 마스터데이터 불러옴");
+  } catch (err) {
+    console.error("❌ 마스터데이터 로드 실패:", err);
+  }
+}
+
+// ✅ 페이지 로드 시 실행
+window.onload = async () => {
+  const localData = loadMasterData();
+
+  // localStorage가 비어 있으면 master.json 불러오기
+  if (!localData || localData.length === 0) {
+    await loadMasterDataFromServer();
+  }
+
+  addRow();
+  updateSupplyPanel();
+};
 </script>
 </body>
 </html>
