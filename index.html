@@ -360,27 +360,39 @@ function downloadExcel() {
 
 async function loadMasterDataFromServer() {
   try {
-    const res = await fetch('data/master.json');
-    const json = await res.json();
-    saveMasterData(json); // localStorage에도 저장
-    console.log("✅ 서버에서 마스터데이터 불러옴");
+    console.log("🔄 master.json 불러오는 중...");
+    const response = await fetch("./data/master.json", { cache: "no-store" }); // 캐시 방지
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const json = await response.json();
+
+    if (Array.isArray(json) && json.length > 0) {
+      saveMasterData(json);
+      console.log(`✅ 서버에서 ${json.length}개 항목 불러옴`);
+    } else {
+      console.warn("⚠️ master.json은 비어있거나 배열 형식이 아닙니다.");
+    }
   } catch (err) {
     console.error("❌ 마스터데이터 로드 실패:", err);
   }
 }
 
 // ✅ 페이지 로드 시 실행
-window.onload = async () => {
-  const localData = loadMasterData();
+window.addEventListener("DOMContentLoaded", async () => {
+  try {
+    const localData = loadMasterData();
+    console.log(`📦 로컬데이터: ${localData.length}개`);
 
-  // localStorage가 비어 있으면 master.json 불러오기
-  if (!localData || localData.length === 0) {
-    await loadMasterDataFromServer();
+    if (!localData || localData.length === 0) {
+      await loadMasterDataFromServer();
+    }
+
+    addRow();
+    updateSupplyPanel();
+    console.log("✅ 초기화 완료");
+  } catch (err) {
+    console.error("⚠️ 초기화 중 오류:", err);
   }
-
-  addRow();
-  updateSupplyPanel();
-};
+});
 </script>
 </body>
 </html>
