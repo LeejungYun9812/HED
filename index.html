@@ -82,6 +82,8 @@ th{background:var(--color-light);}
   <h3>⚙️ 마스터 데이터 관리</h3>
   <textarea id="csvTextarea" rows="8" placeholder="엑셀 데이터 복사 → 붙여넣기 (기종, 아이템, 딜러, 품번, 품명, 수량, 비고 순)" style="width:100%;"></textarea>
   <button class="action-btn" onclick="uploadMasterDataFromText()">📋 텍스트 데이터 추가</button>
+ <button class="action-btn" onclick="exportMasterDataJSON()">📤 JSON 내보내기</button>
+
 
   <div class="filter-bar" style="margin-top:15px;">
     <select id="filterDealer" onchange="applyFilter()"><option value="">-- 딜러 전체 --</option></select>
@@ -116,37 +118,60 @@ let supplyData=JSON.parse(localStorage.getItem(SUPPLY_KEY))||{
 };
 
 const groups={
-  nitrogen_large:["EHB05","EHB06","EHB10","EHB13","EHB17","EHB20","EHB25","EHB30","EHB40","EHB50","EHB70","EHB85","EHB100","EH 01","EH 02","EH 03","EH 04","EH 05","EH 06","EH 22","EH 31","EH 40","EH 50","PRB050","PRB060","PRB100","PRB150","PRB170","PRB200","PRB250","PRB300","EHB35","PRB400","PRB500","PRB700","RHB340","RHB350","RHB370"],
-  nitrogen_small:["EHB008","EHB01","EHB02","EHB03","EHB04","EH 13","EH 10","PRB008","PRB010","PRB020","PRB030","PRB040"],
-  gas_small:["EHB008","EHB01","EHB02","EHB03","EHB04","EHB05","EHB06","EHB10","EHB13","EH 01","EH 02","EH 03","EH 04","EH 05","EH 06","PRB008","PRB010","PRB020","PRB030","PRB040","PRB050","PRB060","PRB100","PRB150","RHB301","RHB302","RHB303","RHB304","RHB305","RHB306","RHB310","RHB313"],
-  gas_large:["EHB17","EHB20","EHB25","EHB30","EHB40","EHB50","EHB70","EHB85","EHB100","EH 10","EH 13","EH 22","EH 31","EH 40","EH 50","PRB170","PRB200","PRB250","PRB300","EHB35","PRB400","PRB500","PRB700","RHB317","RHB320","RHB325","RHB330","RHB340","RHB350","RHB370","RHB340","RHB350","RHB370"]
+  nitrogen_large:["EHB05","EHB06","EHB10","EHB13","EHB17","EHB20","EHB25","EHB30","EHB40","EHB50","EHB70","EHB85","EHB100","EH05","EH06","EH13","EH10","EH22","EH31","EH40","EH50","PRB050","PRB060","PRB100","PRB150","PRB170","PRB200","PRB250","PRB300","EHB35","PRB400","PRB500","PRB700","RHB340","RHB350","RHB370","EH05-TA","EHB06-NL","TF-05","TF-06","TF-10","TF-14","TF-17","TF-20","TF-24E(EH22)","TF-25","TF-28","TF-30","TF-40","TF-50","TF-65","TF-70","TF-85","TF-05E(EH05)","TF-06E(EH06)","TF-10E(EH10)","TF-13E(EH13)","TF-31E(EH31)","TF-40E(EH40)","TF-50E(EH50)","TF-65E(EH60)"],
+  
+nitrogen_small:["EHB008","EHB01","EHB02","EHB03","EHB04","EHB04(H)","EH01","EH02","EH03","EH04","PRB008","PRB010","PRB020","PRB030","PRB040","TF-01","TF-02","TF-03","TF-04","TF-04E(EH04)"],
+  gas_small:["EHB008","EHB01","EHB02","EHB03","EHB04","EHB04(H)","EHB05","EHB06","EHB10","EHB13","EH01","EH02","EH03","EH04","EH05","EH06","EH10","EH13","PRB008","PRB010","PRB020","PRB030","PRB040","PRB050","PRB060","PRB100","PRB150","RHB301","RHB302","RHB303","RHB304","RHB305","RHB306","RHB310","RHB313","EH05-TA","EHB06-NL","TF-01","TF-02","TF-03","TF-04","TF-05","TF-06","TF-10","TF-14","TF-04E(EH04)","TF-05E(EH05)","TF-06E(EH06)","TF-10E(EH10)","TF-13E(EH13)"],
+  gas_large:["EHB17","EHB20","EHB25","EHB30","EHB40","EHB50","EHB70","EHB85","EHB100","EH22","EH31","EH40","EH50","PRB170","PRB200","PRB250","PRB300","EHB35","PRB400","PRB500","PRB700","RHB317","RHB320","RHB325","RHB330","RHB340","RHB350","RHB370","EH24","TF-17","TF-20","TF-24E(EH22)","TF-25","TF-28","TF-30","TF-40","TF-50","TF-65","TF-70","TF-85","TF-31E(EH31)","TF-40E(EH40)","TF-50E(EH50)","TF-65E(EH60)"]
 };
 
 function saveSupply(){localStorage.setItem(SUPPLY_KEY,JSON.stringify(supplyData));}
-function updateSupplyPanel(){
-  const list=document.getElementById('supplyList');
-  list.innerHTML='';
-  const items=[
-    {code:'A090-0021',name:'NITROGEN GAS BOTTLE (소형)'},
-    {code:'A090-0007',name:'NITROGEN GAS BOTTLE (대형)'},
-    {code:'A090-0052',name:'GAS CHARGING KIT (소형)'},
-    {code:'A090-0054',name:'GAS CHARGING KIT (대형)'}
+function updateSupplyPanel() {
+  const list = document.getElementById('supplyList');
+  list.innerHTML = '';
+
+  const items = [
+    { code: 'A090-0021', name: 'NITROGEN GAS BOTTLE (소형)' },
+    { code: 'A090-0007', name: 'NITROGEN GAS BOTTLE (대형)' },
+    { code: 'A090-0052', name: 'GAS CHARGING KIT (소형)' },
+    { code: 'A090-0054', name: 'GAS CHARGING KIT (대형)' }
   ];
-  items.forEach(i=>{
-    const div=document.createElement('div');
-    div.className='supply-item';
-    div.innerHTML=`
-      <div class="supply-header" style="flex-direction:column;align-items:flex-start;">
-        <span style="margin-bottom:4px;"><b>[${i.code}]</b><br>${i.name}</span>
-        <button style="align-self:flex-end;background:#999;color:white;padding:2px 6px;font-size:11px;border:none;border-radius:3px;" onclick="resetOne('${i.code}')">발주완료</button>
+
+  items.forEach(i => {
+    const div = document.createElement('div');
+    div.className = 'supply-item';
+    const count = supplyData[i.code] || 0;
+    const needOrder = count >= 50 ? ' ⚠ 발주 필요' : '';
+
+    div.innerHTML = `
+      <div class="supply-header" style="flex-direction:column;align-items:flex-start;width:100%;">
+        <span style="margin-bottom:4px;font-weight:bold;">
+          [${i.code}]<br>${i.name}
+        </span>
+        <div style="display:flex;justify-content:space-between;align-items:center;width:100%;">
+          <div>
+            <button onclick="adjustSupply('${i.code}', -1)" style="background:#ccc;color:black;padding:2px 6px;font-size:11px;border:none;border-radius:3px;">−</button>
+            <span id="count-${i.code}" style="display:inline-block;width:40px;text-align:center;font-weight:bold;">${count}</span>
+            <button onclick="adjustSupply('${i.code}', 1)" style="background:#009688;color:white;padding:2px 6px;font-size:11px;border:none;border-radius:3px;">＋</button>
+          </div>
+          <button style="background:#999;color:white;padding:2px 6px;font-size:11px;border:none;border-radius:3px;"
+                  onclick="resetOne('${i.code}')">발주완료</button>
+        </div>
       </div>
-      <div class="status ${supplyData[i.code]>=50?'danger':''}">
-        ${supplyData[i.code]}개${supplyData[i.code]>=50?' ⚠ 발주 필요':''}
+      <div class="status ${count >= 50 ? 'danger' : ''}">
+        ${count}개${needOrder}
       </div>`;
     list.appendChild(div);
   });
 }
 function resetOne(code){supplyData[code]=0;saveSupply();updateSupplyPanel();alert(`[${code}] 초기화 완료.`);}
+
+function adjustSupply(code, delta) {
+  if (!(code in supplyData)) supplyData[code] = 0;
+  supplyData[code] = Math.max(0, supplyData[code] + delta); // 0 미만 방지
+  saveSupply();
+  updateSupplyPanel();
+}
 
 function loadMasterData(){const d=localStorage.getItem(LOCAL_STORAGE_KEY);return d?JSON.parse(d):[];}
 function saveMasterData(d){localStorage.setItem(LOCAL_STORAGE_KEY,JSON.stringify(d));}
@@ -210,14 +235,29 @@ function calculateRequirements(){
       i.기종.toUpperCase().trim() === model
     );
 
+    // ✅ 소모품 카운팅 로직
     if (groups.nitrogen_small.includes(model)) supplyData['A090-0021'] += q;
     if (groups.nitrogen_large.includes(model)) supplyData['A090-0007'] += q;
     if (groups.gas_small.includes(model)) supplyData['A090-0052'] += q;
     if (groups.gas_large.includes(model)) supplyData['A090-0054'] += q;
 
+    // ✅ 결과 누적
     items.forEach(i => {
       const count = (parseInt(i.소요수량_단위당, 10) || 0) * q;
-      if (!res[i.품번]) res[i.품번] = { name: i.품명, total: 0, remark: i.비고 || '' };
+      const remarkValue = i.비고 || i["비고"] || i.remark || i.Remark || "";
+
+      if (!res[i.품번]) {
+        res[i.품번] = {
+          name: i.품명,
+          total: 0,
+          remark: remarkValue.trim()
+        };
+      } else {
+        // 같은 품번 여러 번 나올 경우 비고를 병합
+        if (remarkValue && !res[i.품번].remark.includes(remarkValue)) {
+          res[i.품번].remark += (res[i.품번].remark ? " / " : "") + remarkValue;
+        }
+      }
       res[i.품번].total += count;
     });
   });
@@ -225,6 +265,7 @@ function calculateRequirements(){
   saveSupply();
   updateSupplyPanel();
 
+  // ✅ 결과표 표시
   const tbody = document.querySelector('#resultTable tbody');
   tbody.innerHTML = '';
 
@@ -239,7 +280,7 @@ function calculateRequirements(){
     r.insertCell(0).textContent = k;
     r.insertCell(1).textContent = res[k].name;
     r.insertCell(2).textContent = res[k].total;
-    r.insertCell(3).textContent = res[k].remark;
+    r.insertCell(3).textContent = res[k].remark || ""; // ✅ 반드시 비고 표시
   });
 
   document.getElementById('reportBtns').style.display = 'block';
@@ -248,25 +289,52 @@ function calculateRequirements(){
 function uploadMasterDataFromText(){
   const t=document.getElementById('csvTextarea').value.trim();if(!t)return alert("데이터를 붙여넣으세요.");const d=t.includes('\t')?'\t':',';Papa.parse(t,{header:true,skipEmptyLines:true,delimiter:d,complete:handleParsedData});
 }
-function handleParsedData(r){
-  const arr=[];
-  r.data.forEach(x=>{
-    if(x.기종 && x.아이템 && x.딜러 && x.품번 && x.품명 && x.수량){
+function handleParsedData(result) {
+  const arr = [];
+
+  // ✅ 1️⃣ 헤더명 정규화 (공백·BOM 제거)
+  const normalizedData = result.data.map(row => {
+    const fixed = {};
+    Object.keys(row).forEach(key => {
+      const cleanKey = key
+        .trim()
+        .replace(/\uFEFF/g, "")  // BOM 제거
+        .replace(/\s+/g, "");   // 모든 공백 제거
+      fixed[cleanKey] = row[key];
+    });
+    return fixed;
+  });
+
+  // ✅ 2️⃣ 각 행 데이터 처리
+  normalizedData.forEach(x => {
+    if (x.기종 && x.아이템 && x.딜러 && x.품번 && x.품명 && x.수량) {
+
+      const remarkValue =
+        x.비고 ||
+        x.비고란 ||
+        x.REMARK ||
+        x.Remark ||
+        x.remark ||
+        "";
+
       arr.push({
-        "기종":x.기종.trim(),
-        "아이템":x.아이템.trim(),
-        "딜러":x.딜러.trim(),
-        "품번":x.품번.trim(),
-        "품명":x.품명.trim(),
-        "소요수량_단위당":parseInt(x.수량,10),
-        "비고":x.비고?x.비고.trim():""
+        "기종": String(x.기종).trim(),
+        "아이템": String(x.아이템).trim(),
+        "딜러": String(x.딜러).trim(),
+        "품번": String(x.품번).trim(),
+        "품명": String(x.품명).trim(),
+        "소요수량_단위당": parseInt(x.수량, 10) || 0,
+        "비고": String(remarkValue).trim()
       });
     }
   });
+
+  // ✅ 3️⃣ 저장 및 반영
   const existing = loadMasterData();
   const merged = existing.concat(arr);
   saveMasterData(merged);
-  alert(`총 ${arr.length}개 데이터 추가, 전체 ${merged.length}개 데이터 저장되었습니다.`);
+
+  alert(`총 ${arr.length}개 데이터 추가 완료\n전체 ${merged.length}개 데이터 저장됨`);
   refreshFilters();
   applyFilter();
 }
@@ -361,38 +429,47 @@ function downloadExcel() {
 async function loadMasterDataFromServer() {
   try {
     console.log("🔄 master.json 불러오는 중...");
-    const response = await fetch("./data/master.json", { cache: "no-store" }); // 캐시 방지
+    const response = await fetch("./data/master.json", { cache: "no-store" });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const json = await response.json();
-
-    if (Array.isArray(json) && json.length > 0) {
-      saveMasterData(json);
-      console.log(`✅ 서버에서 ${json.length}개 항목 불러옴`);
-    } else {
-      console.warn("⚠️ master.json은 비어있거나 배열 형식이 아닙니다.");
-    }
+    console.log(`✅ 서버에서 ${json.length}개 항목 불러옴`);
+    return json;
   } catch (err) {
     console.error("❌ 마스터데이터 로드 실패:", err);
+    return [];
   }
 }
 
-// ✅ 페이지 로드 시 실행
+// ✅ 페이지 로드 시 항상 서버에서 새 데이터 불러오기
 window.addEventListener("DOMContentLoaded", async () => {
-  try {
-    const localData = loadMasterData();
-    console.log(`📦 로컬데이터: ${localData.length}개`);
-
-    if (!localData || localData.length === 0) {
-      await loadMasterDataFromServer();
-    }
-
-    addRow();
-    updateSupplyPanel();
-    console.log("✅ 초기화 완료");
-  } catch (err) {
-    console.error("⚠️ 초기화 중 오류:", err);
+  const masterData = await loadMasterDataFromServer();
+  if (masterData.length > 0) {
+    localStorage.setItem("everdigm_attachment_master_data", JSON.stringify(masterData));
   }
+  addRow();
+  updateSupplyPanel();
+  console.log("✅ 최신 마스터데이터로 초기화 완료");
 });
+function exportMasterDataJSON() {
+  const data = loadMasterData();
+  if (!data || data.length === 0) {
+    alert("내보낼 마스터데이터가 없습니다.");
+    return;
+  }
+
+  const blob = new Blob([JSON.stringify(data, null, 2)], {
+    type: 'application/json;charset=utf-8'
+  });
+  const url = URL.createObjectURL(blob);
+
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `master_${new Date().toISOString().slice(0, 10)}.json`;
+  link.click();
+
+  URL.revokeObjectURL(url);
+}
+
 </script>
 </body>
 </html>
